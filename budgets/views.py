@@ -1,6 +1,7 @@
 import jwt
 from datetime import datetime
 from django.utils import timezone
+from django.db.models import Sum
 from django.contrib.auth import authenticate
 from rest_framework import generics, mixins
 # from rest_framework.views import APIView
@@ -12,7 +13,7 @@ from rest_framework import status
 
 from config import settings
 from .models import Category, Budgets
-from .serializers import CategorySerializer, BudgetsSerializer
+from .serializers import CategorySerializer, BudgetsSerializer, BudgetsRecSerializer
 
 SECRET_KEY = settings.SECRET_KEY
 ALGORITHM = 'HS256'
@@ -48,19 +49,25 @@ class SetBudgetView(generics.ListCreateAPIView, mixins.UpdateModelMixin):
             return Budgets.objects.get(user=user, category=category, create_at__month=current_month)
         except Budgets.DoesNotExist:
             return None
-    def post(self, request, *args, **kwargs):
-        # TODO: user는 같은 월에 하나의 catory-amount를 지정할 수 있다.
         
+    def post(self, request, *args, **kwargs):
         try:
             token = request.headers.get("Authorization", "").split(" ")[1]
             payload = jwt.decode(token, SECRET_KEY, algorithms=ALGORITHM)
             user_id = payload['user_id']
             if user_id is not None:
+                user = get_object_or_404(User, id=user_id)
                 category_id = request.data.get('category')
                 amount = request.data.get('amount')
                 current_month = timezone.now().month
-                
-                 # 이미 설정한 예산 정보가 있는지 확인
+                #총 예산 구하기
+                user_infos = Budgets.objects.filter(user_id=user_id)
+                total = user_infos.aggregate(total=Sum('amount'))['total']
+                print("total : " , total)
+                user.total = total
+                user.save() #유저 총액 업데이트
+                print('total 저장완료')
+                # 이미 설정한 예산 정보가 있는지 확인
                 instance = self.has_budget_for_month(user_id, category_id, current_month)
                 if instance is not None:
                     return Response({'error': '해당 카테고리에 이미 설정한 예산 정보가 있습니다.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -81,15 +88,23 @@ class SetBudgetView(generics.ListCreateAPIView, mixins.UpdateModelMixin):
             payload = jwt.decode(token, SECRET_KEY, algorithms=ALGORITHM)
             user_id = payload['user_id']
             if user_id is not None:
+                user = get_object_or_404(User, id=user_id)
                 category_id = request.data.get('category')
                 amount = request.data.get('amount')
                 current_month = timezone.now().month
              # 이미 설정한 예산 정보가 있는지 확인
                 instance= self.has_budget_for_month(user_id, category_id, current_month)
                 if instance is not None:
-                    instance.amount = amount
-                    instance.save()
-                    serializer = self.serializer_class(instance)
+                    #총 예산 구하기
+                    user_infos = Budgets.objects.filter(user_id=user_id)
+                    total = user_infos.aggregate(total=Sum('amount'))['total']
+                    user = User.objects.get(id=user_id)
+                    user.total = total
+                    user.save() #유저 총액 업데이트
+                    
+                    serializer = self.serializer_class(data={'user': user_id, 'category': category_id, 'amount': amount})
+                    serializer.is_valid(raise_exception=True)
+                    serializer.save()
                 else:
                     raise ValueError('기존 데이터가 존재하지않습니다')
                 return Response(serializer.data, status=status.HTTP_200_OK)
