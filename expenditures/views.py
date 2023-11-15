@@ -1,3 +1,4 @@
+import jwt
 from django.utils import timezone
 from rest_framework import generics
 from django.shortcuts import get_object_or_404
@@ -31,6 +32,20 @@ class SetExpendituresListView(generics.ListCreateAPIView):  #, generics.Retrieve
     filter_backends = [DjangoFilterBackend]
     filterset_class = ExpenditureFilter
 
+    def get_user_info(self,request,*args, **kwargs):
+        token = request.headers.get("Authorization", "").split(" ")[1]
+        payload = jwt.decode(token, SECRET_KEY, algorithms=ALGORITHM)
+        user_id = payload['user_id']
+        if user_id is not None:
+            user = get_object_or_404(User, id=user_id)
+            return user
+        return  None    
+    
+    def get_total_expense_amount(self): 
+        #모든 지출의 합 구하기
+        total_expense = Expenditure.objects.aggregate(total=Sum('expense_amount'))['total']
+        return total_expense if total_expense is not None else 0
+    
     def get_category_expense_summary(self, queryset):
         #* 월별 각 카테고리의 비용합계 보기 -> 월 미설정시 현재 달을 기본으로 한다.
         month= timezone.now().month     #기본 이번달로 지정
@@ -45,14 +60,14 @@ class SetExpendituresListView(generics.ListCreateAPIView):  #, generics.Retrieve
             category = None
         if category:
             summary = (
-                queryset.filter(create_at__month=month, category=category)
+                queryset.filter(create_at__month=month, category=category, is_except=False)
                 .values('category', month=ExtractMonth('create_at'))
                 .annotate(total_expense=Sum('expense_amount'))
                 .order_by('-total_expense')
             )
         else:
             summary = (
-                queryset.filter(create_at__month=month)
+                queryset.filter(create_at__month=month,is_except=False)
                 .values('category', month=ExtractMonth('create_at'))
                 .annotate(total_expense=Sum('expense_amount'))
                 .order_by('-total_expense')
@@ -111,6 +126,12 @@ class SetExpendituresListView(generics.ListCreateAPIView):  #, generics.Retrieve
     
     def post(self, request, *args, **kwargs):
         #* 데이터 추가
+        user = self.get_user_info(request)
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user.total = self.get_total_expense_amount()
+        # print("Total expense : ", user.total)
+        user.save()
         return super().create(request, *args, **kwargs)
 
     
@@ -123,6 +144,20 @@ class SetExpendituresDetailView(generics.RetrieveUpdateDestroyAPIView):
     '''
     serializer_class = ExpenditureDetailSerializer
     
+    def get_total_expense_amount(self): 
+        #모든 지출의 합 구하기
+        total_expense = Expenditure.objects.aggregate(total=Sum('expense_amount'))['total']
+        return total_expense if total_expense is not None else 0
+    
+    def get_user_info(self,request,*args, **kwargs):
+        token = request.headers.get("Authorization", "").split(" ")[1]
+        payload = jwt.decode(token, SECRET_KEY, algorithms=ALGORITHM)
+        user_id = payload['user_id']
+        if user_id is not None:
+            user = get_object_or_404(User, id=user_id)
+            return user
+        return  None    
+    
     def get(self, request, *args, **kwargs):
         expenditure_id = self.kwargs['pk']
         expenditure = Expenditure.objects.get(pk=expenditure_id)
@@ -133,17 +168,23 @@ class SetExpendituresDetailView(generics.RetrieveUpdateDestroyAPIView):
     def put(self, request, *args, **kwargs):
         expenditure_id = self.kwargs['pk']
         expenditure = Expenditure.objects.get(pk=expenditure_id)
+        user = self.get_user_info(request)  #token에서 user 정보 받아오기
         
         category = request.data.get('category')
         expense_amount = request.data.get('expense_amount')
         memo = request.data.get('memo')
         is_except = request.data.get('is_except')
+        user.total = self.get_total_expense_amount()
+        # print("Total expense : ", user.total)
+        user.save()
         
         data = {
             'category' : category,
             'expense_amount' : expense_amount,
             'memo' : memo,
-            'is_except' : is_except,
+            'is_except' :  is_except,
+            'total' : user.total
+            
         }
         serializer = ExpenditureDetailSerializer(expenditure, data=data)
         serializer.is_valid(raise_exception=True)
@@ -152,14 +193,19 @@ class SetExpendituresDetailView(generics.RetrieveUpdateDestroyAPIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     def patch(self, request, *args, **kwargs):
+        user = self.get_user_info(request)  #token에서 user 정보 받아오기
         expenditure_id = self.kwargs['pk']
         expenditure = Expenditure.objects.get(pk=expenditure_id)
-
         # 부분 업데이트를 위한 데이터 추출
         category = request.data.get('category')
         expense_amount = request.data.get('expense_amount')
         memo = request.data.get('memo')
-
+        
+        user.total = self.get_total_expense_amount()
+        # print("Total expense : ", user.total)
+        user.save()
+        
+        
         data = {}
         if category is not None:
             data['category'] = category
@@ -175,8 +221,12 @@ class SetExpendituresDetailView(generics.RetrieveUpdateDestroyAPIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     def delete(self, request, *args, **kwargs):
+        user = self.get_user_info(request)  #token에서 user 정보 받아오기
         expenditure_id = self.kwargs['pk']
         expenditure = Expenditure.objects.get(pk=expenditure_id)
         expenditure.delete()
+        user.total = self.get_total_expense_amount()
+        # print("Total expense : ", user.total)
+        user.save()
         
         return Response(status=status.HTTP_204_NO_CONTENT)

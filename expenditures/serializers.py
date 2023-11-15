@@ -7,13 +7,14 @@ from .models import Category, Expenditure
 User = get_user_model()
 
 class ExpenditureSerializer(serializers.ModelSerializer):
+    total = serializers.IntegerField(source='user.total', label='총지출액', read_only=True)
     class Meta:
         model = Expenditure
-        fields = ['category', 'user', 'expense_amount', 'memo',  'is_except']
+        fields = ['category', 'user', 'expense_amount', 'memo',  'is_except', 'total']
 
         
 class ExpenditureDetailSerializer(serializers.ModelSerializer):
+    total = serializers.IntegerField(source='user.total',label='총지출액', read_only=True)
     class Meta:
         model = Expenditure
-        fields = ['category', 'expense_amount', 'memo', 'is_except']
-        
+        fields = ['category', 'expense_amount', 'memo', 'is_except', 'total']
