@@ -111,3 +111,39 @@ class SetBudgetView(generics.ListCreateAPIView, mixins.UpdateModelMixin):
         except jwt.InvalidTokenError:
             return Response({'error' : '권한이 없는 사용자입니다.'}, status.HTTP_401_UNAUTHORIZED) 
         
+
+class BudgetRecView(generics.ListCreateAPIView, mixins.UpdateModelMixin):
+    '''
+    POST budgets/rec : 카테고리별 예산 자동설정
+    PATCH budgets/rec : 카고리별 총 예산 변경
+    '''
+    queryset = Budgets.objects.all()
+    serializer_class = BudgetsRecSerializer
+    permission_classes = [IsAuthenticated,]
+    
+    def get_average_amount(self):
+        #유저별 카테고리별 통계 구하기
+        pass
+    
+    def post(self, request, *args, **kwargs):
+        try:
+            token = request.headers.get("Authorization", "").split(" ")[1]
+            payload = jwt.decode(token, SECRET_KEY, algorithms=ALGORITHM)
+            user_id = payload['user_id']
+            
+            if user_id is not None:
+                total = request.data.get('total')   #유저가 입력한 총 예산
+                user = get_object_or_404(User, id=user_id)
+                
+                #User모델 total 필드 업데이트
+                user.total = total
+                user.save(0)
+                print("User total: ", user.total)
+                
+        except jwt.InvalidTokenError:
+            return Response({'error' : '권한이 없는 사용자입니다.'}, status.HTTP_401_UNAUTHORIZED) 
+        
+        return super().post(request, *args, **kwargs)
+    
+    def patch (self, request, *args, **kwargs):
+        return super().patch(request, *args, **kwargs)

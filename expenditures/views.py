@@ -31,7 +31,6 @@ class SetExpendituresListView(generics.ListCreateAPIView):  #, generics.Retrieve
     filter_backends = [DjangoFilterBackend]
     filterset_class = ExpenditureFilter
 
-    
     def get_category_expense_summary(self, queryset):
         #* 월별 각 카테고리의 비용합계 보기 -> 월 미설정시 현재 달을 기본으로 한다.
         month= timezone.now().month     #기본 이번달로 지정
@@ -74,14 +73,11 @@ class SetExpendituresListView(generics.ListCreateAPIView):  #, generics.Retrieve
         )
         return summary
     
-    
     def get_total_summary(self, data):
         #* 조회된 데이터의 지출비용 총합 구하기
         print('data:', data)
         total_expense_sum = sum(item['total_expense'] for item in data)
         return total_expense_sum
-            
-        
     
     def get_data_list(self, queryset):
         month= timezone.now().month     #기본 이번달로 지정
@@ -98,7 +94,6 @@ class SetExpendituresListView(generics.ListCreateAPIView):  #, generics.Retrieve
             return queryset.filter(create_at__month=month, category=self.request.query_params['category']).values()
         else:
             return queryset.filter(create_at__month=month).values()
-
     
     def get(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())
@@ -115,6 +110,7 @@ class SetExpendituresListView(generics.ListCreateAPIView):  #, generics.Retrieve
         return Response(data, status=status.HTTP_200_OK)
     
     def post(self, request, *args, **kwargs):
+        #* 데이터 추가
         return super().create(request, *args, **kwargs)
 
     
@@ -125,7 +121,7 @@ class SetExpendituresDetailView(generics.RetrieveUpdateDestroyAPIView):
     PATCH     expenditures/<int:pk>/  : 지출 내역 일부 수정
     DELETE    expenditures/<int:pk>/  : 지출 내역 삭제
     '''
-    serializer_class = ExpenditureSerializer
+    serializer_class = ExpenditureDetailSerializer
     
     def get(self, request, *args, **kwargs):
         expenditure_id = self.kwargs['pk']
@@ -141,11 +137,13 @@ class SetExpendituresDetailView(generics.RetrieveUpdateDestroyAPIView):
         category = request.data.get('category')
         expense_amount = request.data.get('expense_amount')
         memo = request.data.get('memo')
+        is_except = request.data.get('is_except')
         
         data = {
             'category' : category,
             'expense_amount' : expense_amount,
-            'memo' : memo
+            'memo' : memo,
+            'is_except' : is_except,
         }
         serializer = ExpenditureDetailSerializer(expenditure, data=data)
         serializer.is_valid(raise_exception=True)

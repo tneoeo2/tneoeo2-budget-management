@@ -9,11 +9,11 @@ User = get_user_model()
 class ExpenditureSerializer(serializers.ModelSerializer):
     class Meta:
         model = Expenditure
-        fields = ['category', 'user', 'expense_amount', 'memo']
+        fields = ['category', 'user', 'expense_amount', 'memo',  'is_except']
 
         
 class ExpenditureDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = Expenditure
-        fields = ['category', 'expense_amount', 'memo']
+        fields = ['category', 'expense_amount', 'memo', 'is_except']
         
