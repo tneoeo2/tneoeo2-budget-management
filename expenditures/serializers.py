@@ -18,3 +18,11 @@ class ExpenditureDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = Expenditure
         fields = ['category', 'expense_amount', 'memo', 'is_except', 'total']
+        
+        
+class ExpenditureNotiSerializer(serializers.Serializer):        
+    total = serializers.IntegerField(source='user.total',label='총지출액', read_only=True)
+    class Meta:
+        model = Expenditure
+        fields = ['category', 'appropriate_amount','expense_amount', 'memo', 'is_except', 'total']
+        
