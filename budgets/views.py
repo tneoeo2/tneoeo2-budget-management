@@ -60,13 +60,7 @@ class SetBudgetView(generics.ListCreateAPIView, mixins.UpdateModelMixin):
                 category_id = request.data.get('category')
                 amount = request.data.get('amount')
                 current_month = timezone.now().month
-                #총 예산 구하기
-                # user_infos = Budgets.objects.filter(user_id=user_id)
-                # total = user_infos.aggregate(total=Sum('amount'))['total']
-                # print("total : " , total)
-                # user.total = total
-                # user.save() #유저 총액 업데이트
-                # print('total 저장완료')
+
                 # 이미 설정한 예산 정보가 있는지 확인
                 instance = self.has_budget_for_month(user_id, category_id, current_month)
                 if instance is not None:
