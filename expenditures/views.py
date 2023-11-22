@@ -1,4 +1,5 @@
 import jwt
+from datetime import datetime, timedelta
 from django.utils import timezone
 from rest_framework import generics
 from django.shortcuts import get_object_or_404
@@ -12,15 +13,20 @@ from rest_framework import status
 
 from config import settings
 from .models import Category, Expenditure, AppropriateExpenditure
+from budgets.models import Budgets
 from .filters import ExpenditureFilter
 from .serializers import ExpenditureSerializer,ExpenditureDetailSerializer, ExpenditureNotiSerializer
+from budgets.serializers import BudgetsSerializer
 
 SECRET_KEY = settings.SECRET_KEY
 ALGORITHM = 'HS256'
 
 User = get_user_model()
 
-# Create your views here.
+# TODO : 추가할 부분
+# - 지출 통계API 추가 
+# - 지출 안내  Scheduler, Webhook과 연결
+
 class SetExpendituresListView(generics.ListCreateAPIView):  #, generics.RetrieveUpdateDestroyAPIView
     '''
      GET expenditures/ : 지출 목록 api
@@ -32,6 +38,7 @@ class SetExpendituresListView(generics.ListCreateAPIView):  #, generics.Retrieve
     filter_backends = [DjangoFilterBackend]
     filterset_class = ExpenditureFilter
 
+    # TODO : 공통 계산, 기능 부분 모듈화하기
     def get_user_info(self,request,*args, **kwargs):
         token = request.headers.get("Authorization", "").split(" ")[1]
         payload = jwt.decode(token, SECRET_KEY, algorithms=ALGORITHM)
@@ -319,4 +326,75 @@ class ExpenditureNotiView(generics.ListAPIView):
         }
         
         return Response(data, status=status.HTTP_200_OK)
+        
+        
+        
+class ExpenditureReciView(generics.ListAPIView):
+    queryset = Budgets.objects.all()
+    
+    def get_budgets_summary(self, queryset):
+        #* 월별 총비용 합계보기
+        month= timezone.now().month     #기본 이번달로 지정
+        summary = (
+            queryset.filter(create_at__month=month)
+            .values(month=ExtractMonth('create_at'))
+            .annotate(total_expense=Sum('amount'))
+        )
+        return list(summary)[0]['total_expense']
+    
+    def get_user_info(self,request,*args, **kwargs):
+        token = request.headers.get("Authorization", "").split(" ")[1]
+        payload = jwt.decode(token, SECRET_KEY, algorithms=ALGORITHM)
+        user_id = payload['user_id']
+        if user_id is not None:
+            user = get_object_or_404(User, id=user_id)
+            return user
+        return  None    
+    
+    def get_month_and_days(self):
+        now = datetime.now()
+        month = now.month
+        today = now.day
+        # 이번 달의 마지막 날짜를 구합니다.
+        if month == 12:
+            next_month = now.replace(year=now.year+1, day=1, month=1)
+        else:
+            next_month = now.replace(day=1, month=now.month+1)
+        last_day_of_month = (next_month - timedelta(days=1)).day
+
+        # 이번 달의 남은 날짜를 구합니다.
+        remaining_days = last_day_of_month - today
+
+        return month, today, remaining_days
+
+    def calculate_daily_budget(self,total_budget):
+        month, today, remaining_days = self.get_month_and_days()
+        print('total_budget : ', total_budget, 'remaining_days : ', remaining_days)
+        daily_budget =  int(total_budget)/ int(remaining_days)
+        return daily_budget, remaining_days
+
+    
+    def get(self, request, *args, **kwargs):
+        #해당 달 기준 남은 날로 나누어 예산 구해줌
+        user = self.get_user_info(request)
+        month_budgets = self.get_budgets_summary(self.queryset)
+        daily_budget, remaining_days = self.calculate_daily_budget(month_budgets)
+        expenditures = Expenditure.objects.filter(user_id=user)
+        expenditure_data = {}
+        for expenditure in expenditures:
+            appropriate_expenditure = AppropriateExpenditure.objects.get(pk=expenditure.appropriate_amount_id)
+            category = Category.objects.get(pk=expenditure.category_id)
+            # print('expenditure : ', appropriate_amount, type(appropriate_amount))
+            # print(expenditure.ratio, remaining_days)
+            expenditure_data[category.name] = round(int(appropriate_expenditure.appropriate_amount)/int(remaining_days),0)
+            print("카테고리 추천 지출 확인 : ", expenditure_data)
+        data = {
+            '이번달 예산': month_budgets,
+            '오늘 지출 가능한 총액' : daily_budget,
+            '카테고리별 추천 지출 금액' : 
+                expenditure_data,
+        }
+        
+        return Response(data, status=status.HTTP_200_OK)
+
         

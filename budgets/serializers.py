@@ -1,3 +1,4 @@
+from django.db.models import Sum, Count, Avg
 from rest_framework import serializers
 from django.contrib.auth import authenticate
 from django.shortcuts import get_object_or_404
@@ -19,16 +20,6 @@ class BudgetsSerializer(serializers.ModelSerializer):
         read_only_fields = ['ratio']
         
     def create(self, validated_data):
-        print('validated_data[user]: ', validated_data['user'])
-        # 유저의 총 예산
-        total_budget = get_object_or_404(User, username=validated_data['user']).total
-        # 사용자가 입력한 예산
-        input_amount = validated_data['amount']
-        # 총 예산이 0인 경우 0으로 설정 (분모가 0일 경우 예외 방지)
-        ratio = 0.0 if total_budget == 0 else input_amount / total_budget
-        # validated_data에 ratio 추가
-        validated_data['ratio'] = round(ratio, 2)
-
         # Budgets 모델 생성
         budget = Budgets.objects.create(**validated_data)
 
@@ -37,9 +28,32 @@ class BudgetsSerializer(serializers.ModelSerializer):
         
         
 class BudgetsRecSerializer(serializers.ModelSerializer):
-    total = serializers.IntegerField(source='user.total',label='총예산')
     class Meta:
         model = Budgets
-        fields = ['category', 'amount', 'user', 'total']
-        # read_only_fields = ['category', 'amount', 'user', 'total']
-        # read_only=True
+        fields = ['category', 'amount', 'user', 'ratio']
+        read_only_fields = ['category', 'user', 'ratio']
+        
+    def create(self, validated_data):
+        user_id = self.context['request'].user.id
+        total_amount = int(validated_data.get('amount'))
+        average_budgets = Budgets.objects.values('category').annotate(avg_amount=Avg('amount'))
+
+        budget_list = []
+        for budget in average_budgets:
+            category = budget['category']
+            avg_amount = int(budget['avg_amount'])
+            
+            # TODO: 비율....? 수정 필요한듯
+            ratio = round((0.0 if total_amount == 0 else avg_amount / total_amount), 2)
+            # user와 category가 동일한 인스턴스를 가져오거나 생성
+            budget, created = Budgets.objects.get_or_create(user_id=user_id, category_id=category,
+                                                            defaults={'amount': avg_amount, 'ratio': ratio})
+            budget_list.append(budget)
+            # 만약 인스턴스가 이미 존재한다면 (created == False), amount와 ratio 값을 업데이트
+            if not created:
+                budget.amount = avg_amount
+                budget.ratio = ratio
+                budget.save()
+            
+        
+        return budget_list

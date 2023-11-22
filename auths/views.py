@@ -18,7 +18,7 @@ class RegistrationAPIView(generics.CreateAPIView):
         serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
             user = serializer.save()
-            refresh = RefreshToken.for_user(user)   #사용자 리프레t 토큰 생성
+            refresh = RefreshToken.for_user(user)   #사용자 리프레시 토큰 생성
             access_token = str(refresh.access_token)  
         else:
             raise ParseError(detail="아이디, 비밀번호를 모두 입력해야합니다.")

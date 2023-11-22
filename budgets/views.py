@@ -1,7 +1,7 @@
 import jwt
 from datetime import datetime
 from django.utils import timezone
-from django.db.models import Sum
+from django.db.models import Sum, Count, Avg
 from django.contrib.auth import authenticate
 from rest_framework import generics, mixins
 # from rest_framework.views import APIView
@@ -119,31 +119,39 @@ class BudgetRecView(generics.ListCreateAPIView, mixins.UpdateModelMixin):
     '''
     queryset = Budgets.objects.all()
     serializer_class = BudgetsRecSerializer
-    permission_classes = [IsAuthenticated,]
-    
-    def get_average_amount(self):
-        #유저별 카테고리별 통계 구하기
-        pass
+    # permission_classes = [IsAuthenticated,]
     
     def post(self, request, *args, **kwargs):
+        "request : amount"
         try:
             token = request.headers.get("Authorization", "").split(" ")[1]
             payload = jwt.decode(token, SECRET_KEY, algorithms=ALGORITHM)
             user_id = payload['user_id']
             
             if user_id is not None:
-                total = request.data.get('total')   #유저가 입력한 총 예산
-                user = get_object_or_404(User, id=user_id)
-                
-                #User모델 total 필드 업데이트
-                user.total = total
-                user.save(0)
-                print("User total: ", user.total)
-                
+                total_amount = request.data.get('amount')   #유저가 입력한 총 예산
+                serializer = BudgetsRecSerializer(data={'amount': total_amount}, context={'request': request})
+                serializer.is_valid(raise_exception=True)
+                serializer.save()
         except jwt.InvalidTokenError:
             return Response({'error' : '권한이 없는 사용자입니다.'}, status.HTTP_401_UNAUTHORIZED) 
         
-        return super().post(request, *args, **kwargs)
+        return Response(serializer.data, status.HTTP_201_CREATED)
     
-    def patch (self, request, *args, **kwargs):
-        return super().patch(request, *args, **kwargs)
+    def patch(self, request, *args, **kwargs):
+        #예산 수동 변경시 사용
+        try:
+            token = request.headers.get("Authorization", "").split(" ")[1]
+            payload = jwt.decode(token, SECRET_KEY, algorithms=ALGORITHM)
+            user_id = payload['user_id']
+            
+            if user_id is not None:
+                total_amount = request.data.get('amount')   #유저가 입력한 총 예산
+                serializer = BudgetsRecSerializer(data={'amount': total_amount}, context={'request': request})
+                serializer.is_valid(raise_exception=True)
+                serializer.save()
+        except jwt.InvalidTokenError:
+            return Response({'error' : '권한이 없는 사용자입니다.'}, status.HTTP_401_UNAUTHORIZED) 
+        
+        
+        return Response(serializer.data, status.HTTP_200_OK)
