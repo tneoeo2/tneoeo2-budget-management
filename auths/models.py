@@ -19,7 +19,7 @@ class CustomUserManager(BaseUserManager):
 
 class User(AbstractBaseUser, PermissionsMixin):
     username = models.CharField(max_length=60, unique=True)
-    total = models.IntegerField(default=0)
+    total = models.IntegerField(default=0)    #총 지출
     is_active = models.BooleanField(default=True)  # 추가
 
     USERNAME_FIELD = 'username'
