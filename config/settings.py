@@ -32,6 +32,7 @@ THIRD_PARTY_APPS =[
     "rest_framework",
     "rest_framework.authtoken",     
     "rest_framework_simplejwt",
+    'django_filters',
     "corsheaders",  #CORS
     "drf_yasg",     #swagger
     'django_apscheduler',
@@ -83,11 +84,13 @@ REST_FRAMEWORK = {
         # 'rest_framework.permissions.IsAuthenticated', # 인증된 사용자만 접근
         'rest_framework.permissions.AllowAny', # 누구나 접근
     ),
+    'DEFAULT_FILTER_BACKENDS': ['django_filters.rest_framework.DjangoFilterBackend'],
 }
 
 # 추가적인 JWT_AUTH 설정
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),     #액세스 토큰 유효기간 설정
+    # 'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),     #액세스 토큰 유효기간 설정
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=600),     #액세스 토큰 유효기간 설정
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),        #refresh token 유효기간 설정
     'ROTATE_REFRESH_TOKENS': False,
     'BLACKLIST_AFTER_ROTATION': False,
