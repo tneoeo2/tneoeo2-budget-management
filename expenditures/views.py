@@ -259,6 +259,7 @@ class ExpenditureNotiView(generics.ListAPIView):
     
     def get_category_expense_summary(self, queryset):
         today = timezone.now().date()  # 오늘날짜 가져오기
+        print('today: %s' % today)
         try:
             category = self.request.query_params['category']
         except Exception as e:
@@ -302,30 +303,35 @@ class ExpenditureNotiView(generics.ListAPIView):
         user = self.get_user_info(request) # 사용자 정보가져오기
         today_total = self.get_expense_summary(self.queryset)   #오늘 총 지출
         today_category_total = self.get_category_expense_summary(self.queryset)
-        
-        
-        total_expense = list(today_total)[0]['total_expense']
-        
-        expenditure = Expenditure.objects.get(user_id=user)
-        appropriate_amount_id= expenditure.appropriate_amount_id     # 적정예산정보 
-        appropriate_expenditure = AppropriateExpenditure.objects.get(id=appropriate_amount_id)
-        # print('appropriate_amount_id: ', appropriate_amount_id)
-        # print('appropriate_expenditure: ', appropriate_expenditure.appropriate_amount)
-        appropriate_amount = appropriate_expenditure.appropriate_amount
-        caution = int(total_expense)/int(appropriate_amount)* 100   # n% 형식으로 출력
-        
-        
-        data = {
-            '오늘 총지출' : today_total,
-            '카테고리 별 금액' : today_category_total,
-            '월별 예산 기준 통계' : {
-                '적정금액' : appropriate_amount_id,
-                '지출금액' : today_total,
-                '위험도' : caution
+        try:
+            # print('today_total : ', today_total)
+            # print('today_category_total : ', today_category_total)
+            total_expense = list(today_total)[0]['total_expense']
+            
+            # TODO : filter로 변경해서 데이터 다수 들어올때 반영
+            expenditure = Expenditure.objects.filter(user_id=user).values()[0]
+            # print('expenditure : ', expenditure)
+            appropriate_amount_id= expenditure['appropriate_amount_id']     # 적정예산정보 
+            appropriate_expenditure = AppropriateExpenditure.objects.get(id=appropriate_amount_id)
+            # print('appropriate_amount_id: ', appropriate_amount_id)
+            # print('appropriate_expenditure: ', appropriate_expenditure.appropriate_amount)
+            appropriate_amount = appropriate_expenditure.appropriate_amount
+            caution = int(total_expense)/int(appropriate_amount)* 100   # n% 형식으로 출력
+            
+            
+            data = {
+                'total' : today_total,
+                'by_category' : today_category_total,
+                'monthly_statistics ' : {
+                    'appropriate_expenditure' : appropriate_amount_id,
+                    'today_expenditure' : today_total,
+                    'caution' : caution,
+                }
             }
-        }
-        
-        return Response(data, status=status.HTTP_200_OK)
+            
+            return Response(data, status=status.HTTP_200_OK)
+        except:
+            return Response({'error': '해당 날짜의 데이터가 없습니다.'},status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         
         
@@ -389,9 +395,9 @@ class ExpenditureReciView(generics.ListAPIView):
             expenditure_data[category.name] = round(int(appropriate_expenditure.appropriate_amount)/int(remaining_days),0)
             print("카테고리 추천 지출 확인 : ", expenditure_data)
         data = {
-            '이번달 예산': month_budgets,
-            '오늘 지출 가능한 총액' : daily_budget,
-            '카테고리별 추천 지출 금액' : 
+            'month_budgets': month_budgets,
+            'daily_budget' : daily_budget,
+            'by_category_rec' : 
                 expenditure_data,
         }
         
