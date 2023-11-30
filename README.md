@@ -314,4 +314,3 @@ Github의 ISSUE 및 Project기능을 이용하여 관리
 ![Alt text|500](imgs/issue.png)
 ![Alt text|500](imgs/git_project.png)
 
-## 구현과정
